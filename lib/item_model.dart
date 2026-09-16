@@ -1,109 +1,196 @@
 class Item {
-  final String name;
-  final String category;
-  final double currentQuantity;
-  final double requiredQuantity;
-  final String unit;
+  String name;
 
-  final int peopleCount;
-  final double quantityPerPerson;
-  final int timesPerDay;
+  // Previous recorded quantity
+  double? previousQuantity;
+  String? previousUnit;
 
-  final String lastConsumptionDate;
+  // Current quantity
+  double currentQuantity;
+  String currentUnit;
+
+  // Required quantity
+  double requiredQuantity;
+  String requiredUnit;
+
+  // Kept internally as 2 as requested
+  int peopleCount;
+
+  String lastConsumptionDate;
 
   Item({
-    required this.name,
-    required this.category,
+    required String name,
+    this.previousQuantity,
+    this.previousUnit,
     required this.currentQuantity,
+    required this.currentUnit,
     required this.requiredQuantity,
-    required this.unit,
+    required this.requiredUnit,
     required this.peopleCount,
-    required this.quantityPerPerson,
-    required this.timesPerDay,
     required this.lastConsumptionDate,
-  });
+  }) : name = capitalizeFirstLetter(name);
 
-  double get dailyConsumption {
-    return peopleCount *
-        quantityPerPerson *
-        timesPerDay;
-  }
+  // ============================================================
+  // CAPITALIZE ITEM NAME
+  // ============================================================
 
-  bool get isLowStock {
-    return currentQuantity <= requiredQuantity;
-  }
+  static String capitalizeFirstLetter(String value) {
+    final trimmed = value.trim();
 
-  double get estimatedDaysRemaining {
-    if (dailyConsumption <= 0) {
-      return double.infinity;
+    if (trimmed.isEmpty) {
+      return trimmed;
     }
 
-    return currentQuantity / dailyConsumption;
+    return trimmed[0].toUpperCase() + trimmed.substring(1);
   }
+
+  // ============================================================
+  // CONVERT QUANTITY TO BASE UNIT
+  // ============================================================
+
+  static double quantityInBaseUnit(
+    double quantity,
+    String unit,
+  ) {
+    switch (unit.toLowerCase()) {
+      case 'kg':
+        return quantity * 1000;
+
+      case 'g':
+        return quantity;
+
+      case 'litres':
+      case 'litre':
+      case 'liter':
+      case 'liters':
+      case 'l':
+        return quantity * 1000;
+
+      case 'ml':
+        return quantity;
+
+      case 'pieces':
+      case 'piece':
+      case 'packets':
+      case 'packet':
+        return quantity;
+
+      default:
+        return quantity;
+    }
+  }
+
+  // ============================================================
+  // LOW STOCK
+  // ============================================================
+
+  bool isLowStockAgainst(
+    double effectiveRequiredQuantity,
+    String effectiveRequiredUnit,
+  ) {
+    final currentBase = quantityInBaseUnit(
+      currentQuantity,
+      currentUnit,
+    );
+
+    final requiredBase = quantityInBaseUnit(
+      effectiveRequiredQuantity,
+      effectiveRequiredUnit,
+    );
+
+    return currentBase < requiredBase;
+  }
+
+  // Existing compatibility getter.
+  //
+  // This uses the item's stored required quantity.
+  // MainScreen will use isLowStockAgainst() when
+  // history-based required quantities are available.
+  bool get isLowStock {
+    final currentBase = quantityInBaseUnit(
+      currentQuantity,
+      currentUnit,
+    );
+
+    final requiredBase = quantityInBaseUnit(
+      requiredQuantity,
+      requiredUnit,
+    );
+
+    return currentBase < requiredBase;
+  }
+
+  // ============================================================
+  // DATE
+  // ============================================================
+
+  static String dateOnly(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  // ============================================================
+  // MAP
+  // ============================================================
 
   Map<String, dynamic> toMap() {
     return {
       'name': name,
-      'category': category,
+
+      'previousQuantity': previousQuantity,
+      'previousUnit': previousUnit,
+
       'currentQuantity': currentQuantity,
+      'currentUnit': currentUnit,
+
       'requiredQuantity': requiredQuantity,
-      'unit': unit,
-      'peopleCount': peopleCount,
-      'quantityPerPerson': quantityPerPerson,
-      'timesPerDay': timesPerDay,
-      'lastConsumptionDate':
-          lastConsumptionDate,
+      'requiredUnit': requiredUnit,
+
+      'peopleCount': 2,
+      'lastConsumptionDate': lastConsumptionDate,
     };
   }
+
+  // ============================================================
+  // FROM MAP
+  // ============================================================
 
   factory Item.fromMap(
     Map<String, dynamic> map,
   ) {
     return Item(
       name: map['name']?.toString() ?? '',
-      category:
-          map['category']?.toString() ?? 'Other',
+
+      previousQuantity:
+          map['previousQuantity'] == null
+              ? null
+              : (map['previousQuantity'] as num)
+                  .toDouble(),
+
+      previousUnit:
+          map['previousUnit']?.toString(),
 
       currentQuantity:
-          (map['currentQuantity'] as num?)
-                  ?.toDouble() ??
-              0.0,
+          (map['currentQuantity'] as num)
+              .toDouble(),
+
+      currentUnit:
+          map['currentUnit']?.toString() ?? 'kg',
 
       requiredQuantity:
-          (map['requiredQuantity'] as num?)
-                  ?.toDouble() ??
-              0.0,
+          (map['requiredQuantity'] as num)
+              .toDouble(),
 
-      unit:
-          map['unit']?.toString() ?? 'g',
+      requiredUnit:
+          map['requiredUnit']?.toString() ?? 'kg',
 
-      peopleCount:
-          (map['peopleCount'] as num?)
-                  ?.toInt() ??
-              1,
-
-      quantityPerPerson:
-          (map['quantityPerPerson'] as num?)
-                  ?.toDouble() ??
-              0.0,
-
-      timesPerDay:
-          (map['timesPerDay'] as num?)
-                  ?.toInt() ??
-              1,
+      peopleCount: 2,
 
       lastConsumptionDate:
           map['lastConsumptionDate']
                   ?.toString() ??
               dateOnly(DateTime.now()),
     );
-  }
-
-  static String dateOnly(
-    DateTime date,
-  ) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
   }
 }

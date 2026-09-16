@@ -1,11 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'add_item_screen.dart';
-import 'history_screen.dart';
-import 'home_screen.dart';
+import 'add_item_screen.dart' as inventory_screen;
+import 'default_quantities.dart';
+import 'history_entry.dart';
+import 'history_screen.dart' as history_screen;
+import 'home_screen.dart' as home_screen;
 import 'item_model.dart';
 
 void main() {
@@ -20,16 +19,67 @@ class HomeEssentialsApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Home Essentials',
+
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
+
+        scaffoldBackgroundColor: const Color(0xFFF8F8F1),
+
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F8F5B)),
+
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF8F8F1),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Color(0xFF315A39),
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: Color(0xFFF8F8F1),
+
+          indicatorColor: Color(0xFFE7F1DF),
+
+          elevation: 0,
+
+          labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+          ),
+        ),
+
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFE0E6DC)),
+          ),
+
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFE0E6DC)),
+          ),
+
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF4F8F5B), width: 1.5),
+          ),
         ),
       ),
+
       home: const MainScreen(),
     );
   }
 }
+
+// ============================================================
+// MAIN SCREEN
+// ============================================================
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -38,419 +88,483 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen>
-    with WidgetsBindingObserver {
-  int selectedIndex = 0;
+class _MainScreenState extends State<MainScreen> {
+  int currentIndex = 0;
 
-  List<Item> items = [];
-  List<String> history = [];
+  // ============================================================
+  // DATA
+  // ============================================================
 
-  bool isLoading = true;
+  // Complete inventory.
+  final List<Item> items = [];
+
+  // ONLY manually selected grocery-list items.
+  final List<Item> groceryListItems = [];
+
+  // Complete history.
+  final List<HistoryEntry> history = [];
+
+  // ============================================================
+  // STARTUP
+  // ============================================================
 
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addObserver(this);
-
-    loadData();
+    _loadData();
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(
-    AppLifecycleState state,
-  ) {
-    if (state == AppLifecycleState.resumed) {
-      applyAutomaticConsumption();
-    }
-  }
-
-  Future<void> loadData() async {
-    try {
-      final prefs =
-          await SharedPreferences.getInstance();
-
-      final savedItems =
-          prefs.getStringList('items') ?? [];
-
-      final savedHistory =
-          prefs.getStringList('history') ?? [];
-
-      final loadedItems = <Item>[];
-
-      for (final savedItem in savedItems) {
-        try {
-          final decoded = jsonDecode(savedItem);
-
-          if (decoded is Map) {
-            loadedItems.add(
-              Item.fromMap(
-                Map<String, dynamic>.from(decoded),
-              ),
-            );
-          }
-        } catch (_) {}
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        items = loadedItems;
-        history = savedHistory;
-        isLoading = false;
-      });
-
-      await applyAutomaticConsumption();
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        items = [];
-        history = [];
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> applyAutomaticConsumption() async {
-    if (items.isEmpty) return;
-
-    final now = DateTime.now();
-
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
-
-    final todayString = Item.dateOnly(today);
-
-    bool changed = false;
-
-    final updatedItems = <Item>[];
-    final newHistory = <String>[];
-
-    for (final item in items) {
-      final lastDate = DateTime.tryParse(
-        item.lastConsumptionDate,
-      );
-
-      if (lastDate == null) {
-        updatedItems.add(
-          Item(
-            name: item.name,
-            category: item.category,
-            currentQuantity: item.currentQuantity,
-            requiredQuantity: item.requiredQuantity,
-            unit: item.unit,
-            peopleCount: item.peopleCount,
-            quantityPerPerson: item.quantityPerPerson,
-            timesPerDay: item.timesPerDay,
-            lastConsumptionDate: todayString,
-          ),
-        );
-
-        changed = true;
-        continue;
-      }
-
-      final lastDay = DateTime(
-        lastDate.year,
-        lastDate.month,
-        lastDate.day,
-      );
-
-      final daysPassed =
-          today.difference(lastDay).inDays;
-
-      if (daysPassed <= 0) {
-        updatedItems.add(item);
-        continue;
-      }
-
-      final dailyConsumption =
-          item.dailyConsumption;
-
-      if (dailyConsumption <= 0) {
-        updatedItems.add(
-          Item(
-            name: item.name,
-            category: item.category,
-            currentQuantity: item.currentQuantity,
-            requiredQuantity: item.requiredQuantity,
-            unit: item.unit,
-            peopleCount: item.peopleCount,
-            quantityPerPerson: item.quantityPerPerson,
-            timesPerDay: item.timesPerDay,
-            lastConsumptionDate: todayString,
-          ),
-        );
-
-        changed = true;
-        continue;
-      }
-
-      final consumed =
-          dailyConsumption * daysPassed;
-
-      double newQuantity =
-          item.currentQuantity - consumed;
-
-      if (newQuantity < 0) {
-        newQuantity = 0;
-      }
-
-      updatedItems.add(
-        Item(
-          name: item.name,
-          category: item.category,
-          currentQuantity: newQuantity,
-          requiredQuantity: item.requiredQuantity,
-          unit: item.unit,
-          peopleCount: item.peopleCount,
-          quantityPerPerson: item.quantityPerPerson,
-          timesPerDay: item.timesPerDay,
-          lastConsumptionDate: todayString,
-        ),
-      );
-
-      newHistory.add(
-        '${item.name}: '
-        '${consumed.toStringAsFixed(2)} '
-        '${item.unit} automatically consumed '
-        'over $daysPassed day(s)',
-      );
-
-      changed = true;
-    }
-
-    if (!changed || !mounted) return;
+  Future<void> _loadData() async {
+    if (!mounted) return;
 
     setState(() {
-      items = updatedItems;
-      history.addAll(newHistory);
+      items.clear();
+      groceryListItems.clear();
+      history.clear();
     });
-
-    await saveData();
   }
 
-  Future<void> saveData() async {
-    final prefs =
-        await SharedPreferences.getInstance();
+  // ============================================================
+  // FIND ITEM
+  // ============================================================
 
-    final encodedItems = items.map((item) {
-      return jsonEncode(item.toMap());
+  int _findItemIndex(Item item) {
+    return items.indexWhere(
+      (existing) =>
+          existing.name.trim().toLowerCase() == item.name.trim().toLowerCase(),
+    );
+  }
+
+  // ============================================================
+  // EFFECTIVE REQUIRED QUANTITY
+  // ============================================================
+  //
+  // Priority:
+  //
+  // 1. History of the item
+  // 2. Code-defined default
+  //
+  // For history, the latest meaningful recorded
+  // quantity is used as the historical requirement.
+  //
+  // This can later be changed to average / most
+  // frequent purchase quantity if required.
+  // ============================================================
+
+  DefaultQuantity getEffectiveRequiredQuantity(Item item) {
+    final itemHistory = history
+        .where(
+          (entry) =>
+              entry.itemName.trim().toLowerCase() ==
+              item.name.trim().toLowerCase(),
+        )
+        .where((entry) => entry.newQuantity != null && entry.newUnit != null)
+        .toList();
+
+    if (itemHistory.isNotEmpty) {
+      itemHistory.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+      final latest = itemHistory.first;
+
+      return DefaultQuantity(
+        quantity: latest.newQuantity!,
+        unit: latest.newUnit!,
+      );
+    }
+
+    final defaultValue =
+        defaultRequiredQuantities[item.name.trim().toLowerCase()];
+
+    return defaultValue ?? fallbackDefaultQuantity;
+  }
+
+  // ============================================================
+  // LOW STOCK
+  // ============================================================
+
+  List<Item> get lowStockItems {
+    return items.where((item) {
+      final required = getEffectiveRequiredQuantity(item);
+
+      return item.isLowStockAgainst(required.quantity, required.unit);
     }).toList();
+  }
 
-    await prefs.setStringList(
-      'items',
-      encodedItems,
-    );
+  // ============================================================
+  // HISTORY
+  // ============================================================
 
-    await prefs.setStringList(
-      'history',
-      history,
+  void _addHistory({
+    required String action,
+    required String itemName,
+    double? oldQuantity,
+    String? oldUnit,
+    double? newQuantity,
+    String? newUnit,
+  }) {
+    history.add(
+      HistoryEntry(
+        action: action,
+        itemName: itemName,
+        oldQuantity: oldQuantity,
+        oldUnit: oldUnit,
+        newQuantity: newQuantity,
+        newUnit: newUnit,
+        peopleCount: null,
+        dateTime: DateTime.now(),
+      ),
     );
   }
+
+  // ============================================================
+  // ADD ITEM
+  // ============================================================
 
   Future<void> addItem(Item item) async {
-    final index = items.indexWhere(
-      (existingItem) =>
-          existingItem.name.trim().toLowerCase() ==
-          item.name.trim().toLowerCase(),
+    final exists = items.any(
+      (existing) =>
+          existing.name.trim().toLowerCase() == item.name.trim().toLowerCase(),
     );
+
+    if (exists) {
+      return;
+    }
+
+    // Use the code-defined default required quantity
+    // when one exists for this item.
+    final defaultValue =
+        defaultRequiredQuantities[item.name.trim().toLowerCase()];
+
+    if (defaultValue != null) {
+      item.requiredQuantity = defaultValue.quantity;
+      item.requiredUnit = defaultValue.unit;
+    }
+
+    setState(() {
+      // ----------------------------------------------------------
+      // 1. ADD TO INVENTORY
+      // ----------------------------------------------------------
+      items.add(item);
+
+      // ----------------------------------------------------------
+      // 2. AUTOMATICALLY ADD TO GROCERY LIST
+      // ----------------------------------------------------------
+      final alreadyInGroceryList = groceryListItems.any(
+        (existing) =>
+            existing.name.trim().toLowerCase() ==
+            item.name.trim().toLowerCase(),
+      );
+
+      if (!alreadyInGroceryList) {
+        groceryListItems.add(item);
+      }
+
+      // ----------------------------------------------------------
+      // 3. ADD HISTORY
+      // ----------------------------------------------------------
+      _addHistory(
+        action: 'Item Added',
+        itemName: item.name,
+        newQuantity: item.currentQuantity,
+        newUnit: item.currentUnit,
+      );
+    });
 
     if (!mounted) return;
 
-    if (index == -1) {
-      setState(() {
-        items.add(item);
-
-        history.add(
-          '${item.name} added '
-          '(${item.currentQuantity} ${item.unit})',
-        );
-
-        selectedIndex = 0;
-      });
-    } else {
-      final oldItem = items[index];
-
-      final updatedItem = Item(
-        name: oldItem.name,
-        category: item.category,
-        currentQuantity:
-            oldItem.currentQuantity +
-            item.currentQuantity,
-        requiredQuantity: item.requiredQuantity,
-        unit: item.unit,
-        peopleCount: item.peopleCount,
-        quantityPerPerson: item.quantityPerPerson,
-        timesPerDay: item.timesPerDay,
-        lastConsumptionDate:
-            Item.dateOnly(DateTime.now()),
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${item.name} added'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+          duration: const Duration(seconds: 2),
+        ),
       );
+  }
+  // ============================================================
+  // ADD TO GROCERY LIST
+  // ============================================================
 
-      setState(() {
-        items[index] = updatedItem;
+  Future<void> addToGroceryList(Item item) async {
+    final alreadyAdded = groceryListItems.any(
+      (existing) =>
+          existing.name.trim().toLowerCase() == item.name.trim().toLowerCase(),
+    );
 
-        history.add(
-          '${item.name} restocked by '
-          '${item.currentQuantity} ${item.unit}',
-        );
-
-        selectedIndex = 0;
-      });
+    if (alreadyAdded) {
+      return;
     }
 
-    await saveData();
+    setState(() {
+      groceryListItems.add(item);
+    });
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${item.name} added to Grocery List'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
-  Future<void> restockItem(
-    Item item,
-    double quantity,
-  ) async {
-    if (quantity <= 0) return;
+  // ============================================================
+  // UPDATE ITEM
+  // ============================================================
 
-    final index = items.indexWhere(
-      (existingItem) =>
-          existingItem.name.trim().toLowerCase() ==
-          item.name.trim().toLowerCase(),
-    );
+  Future<void> updateItem(
+    Item oldItem, {
+    required String name,
+    required double currentQuantity,
+    required String currentUnit,
+    required double requiredQuantity,
+    required String requiredUnit,
+    required int peopleCount,
+  }) async {
+    final index = _findItemIndex(oldItem);
 
-    if (index == -1 || !mounted) return;
+    if (index == -1) {
+      return;
+    }
 
-    final oldItem = items[index];
+    final actualItem = items[index];
+
+    final oldName = actualItem.name;
+    final oldQuantity = actualItem.currentQuantity;
+    final oldUnit = actualItem.currentUnit;
 
     final updatedItem = Item(
-      name: oldItem.name,
-      category: oldItem.category,
-      currentQuantity:
-          oldItem.currentQuantity + quantity,
-      requiredQuantity: oldItem.requiredQuantity,
-      unit: oldItem.unit,
-      peopleCount: oldItem.peopleCount,
-      quantityPerPerson: oldItem.quantityPerPerson,
-      timesPerDay: oldItem.timesPerDay,
-      lastConsumptionDate:
-          oldItem.lastConsumptionDate,
+      name: name,
+      previousQuantity: oldQuantity,
+      previousUnit: oldUnit,
+      currentQuantity: currentQuantity,
+      currentUnit: currentUnit,
+      requiredQuantity: requiredQuantity,
+      requiredUnit: requiredUnit,
+      peopleCount: 2,
+      lastConsumptionDate: Item.dateOnly(DateTime.now()),
     );
 
     setState(() {
       items[index] = updatedItem;
 
-      history.add(
-        '${oldItem.name} restocked by '
-        '$quantity ${oldItem.unit}',
+      // Preserve Grocery List membership
+      // if the item was already there.
+      final wasInGroceryList = groceryListItems.any(
+        (existing) =>
+            existing.name.trim().toLowerCase() == oldName.trim().toLowerCase(),
+      );
+
+      groceryListItems.removeWhere(
+        (existing) =>
+            existing.name.trim().toLowerCase() == oldName.trim().toLowerCase(),
+      );
+
+      if (wasInGroceryList) {
+        groceryListItems.add(updatedItem);
+      }
+
+      _addHistory(
+        action: 'Item Updated',
+        itemName: updatedItem.name,
+        oldQuantity: oldQuantity,
+        oldUnit: oldUnit,
+        newQuantity: updatedItem.currentQuantity,
+        newUnit: updatedItem.currentUnit,
       );
     });
 
-    await saveData();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${updatedItem.name} updated'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
-  Future<void> editItem(
-    Item oldItem,
-    Item updatedItem,
-  ) async {
-    final index = items.indexWhere(
-      (existingItem) =>
-          existingItem.name.trim().toLowerCase() ==
-          oldItem.name.trim().toLowerCase(),
-    );
+  // ============================================================
+  // RESTOCK
+  // ============================================================
 
-    if (index == -1 || !mounted) return;
+  Future<void> restockItem(Item item) async {
+    final index = _findItemIndex(item);
+
+    if (index == -1) {
+      return;
+    }
+
+    final actualItem = items[index];
+
+    final oldQuantity = actualItem.currentQuantity;
+    final oldUnit = actualItem.currentUnit;
+
+    final required = getEffectiveRequiredQuantity(actualItem);
 
     setState(() {
-      items[index] = updatedItem;
+      // ----------------------------------------------------------
+      // INVENTORY ITEM IS PRESERVED
+      // ----------------------------------------------------------
 
-      history.add(
-        '${oldItem.name} details updated',
+      // Previous = quantity before restocking
+      actualItem.previousQuantity = oldQuantity;
+      actualItem.previousUnit = oldUnit;
+
+      // Update quantity of the SAME item
+      actualItem.currentQuantity = required.quantity;
+      actualItem.currentUnit = required.unit;
+
+      // Keep required quantity synchronized
+      actualItem.requiredQuantity = required.quantity;
+      actualItem.requiredUnit = required.unit;
+
+      // ----------------------------------------------------------
+      // REMOVE ONLY FROM GROCERY LIST
+      // ----------------------------------------------------------
+
+      groceryListItems.removeWhere(
+        (groceryItem) =>
+            groceryItem.name.trim().toLowerCase() ==
+            actualItem.name.trim().toLowerCase(),
+      );
+
+      // ----------------------------------------------------------
+      // HISTORY
+      // ----------------------------------------------------------
+
+      _addHistory(
+        action: 'Item Restocked',
+        itemName: actualItem.name,
+        oldQuantity: oldQuantity,
+        oldUnit: oldUnit,
+        newQuantity: actualItem.currentQuantity,
+        newUnit: actualItem.currentUnit,
       );
     });
 
-    await saveData();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Item restocked',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(16, 0, 16, 90),
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
+
+  // ============================================================
+  // DELETE
+  // ============================================================
 
   Future<void> deleteItem(Item item) async {
-    final index = items.indexWhere(
-      (existingItem) =>
-          existingItem.name.trim().toLowerCase() ==
-          item.name.trim().toLowerCase(),
-    );
+    final index = _findItemIndex(item);
 
-    if (index == -1 || !mounted) return;
+    if (index == -1) {
+      return;
+    }
+
+    final actualItem = items[index];
 
     setState(() {
       items.removeAt(index);
 
-      history.add(
-        '${item.name} deleted from inventory',
+      groceryListItems.removeWhere(
+        (groceryItem) =>
+            groceryItem.name.trim().toLowerCase() ==
+            actualItem.name.trim().toLowerCase(),
+      );
+
+      _addHistory(
+        action: 'Item Deleted',
+        itemName: actualItem.name,
+        oldQuantity: actualItem.currentQuantity,
+        oldUnit: actualItem.currentUnit,
       );
     });
-
-    await saveData();
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
     return Scaffold(
       body: IndexedStack(
-        index: selectedIndex,
+        index: currentIndex,
+
         children: [
-          HomeScreen(
-            items: items,
+          home_screen.HomeScreen(
+            lowStockItems: lowStockItems,
+
+            groceryListItems: groceryListItems,
+
+            onRestock: restockItem,
+
+            onUpdateItem: updateItem,
           ),
 
-          AddItemPage(
+          inventory_screen.AddItemScreen(
             items: items,
+
             onItemAdded: addItem,
-            onItemRestocked: restockItem,
-            onItemEdited: editItem,
+
+            onAddToHome: addToGroceryList,
+
+            onItemEdited: updateItem,
+
             onItemDeleted: deleteItem,
           ),
 
-          HistoryScreen(
-            history: history,
-          ),
+          history_screen.HistoryScreen(history: history),
         ],
       ),
 
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
+        selectedIndex: currentIndex,
+
         onDestinationSelected: (index) {
           setState(() {
-            selectedIndex = index;
+            currentIndex = index;
           });
         },
+
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
+            icon: Icon(Icons.home_outlined, size: 21),
+            selectedIcon: Icon(Icons.home, size: 21),
             label: 'Home',
           ),
+
           NavigationDestination(
-            icon: Icon(Icons.add_circle_outline),
-            selectedIcon: Icon(Icons.add_circle),
-            label: 'Add Items',
+            icon: Icon(Icons.inventory_2_outlined, size: 21),
+            selectedIcon: Icon(Icons.inventory_2, size: 21),
+            label: 'Inventory',
           ),
+
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
+            icon: Icon(Icons.history_outlined, size: 21),
+            selectedIcon: Icon(Icons.history, size: 21),
             label: 'History',
           ),
         ],
