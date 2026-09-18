@@ -1,4 +1,5 @@
 # Home Essentials
+# Home Essentials
 
 A Flutter-based mobile application designed to simplify household inventory tracking and grocery management[cite: 1]. The app provides a centralized interface for monitoring stock levels, automatically identifying low-stock items, managing a dedicated grocery list, and maintaining historical records of all inventory operations[cite: 1].
 
@@ -51,7 +52,8 @@ Managing household groceries manually makes it easy to lose track of what is run
 ---
 
 ## 🔄 Application Workflow
-->
+
+
                     ADD ITEM
                        │
                        ▼
@@ -84,8 +86,6 @@ Update Inventory   Remove from
        ▼
 Create History Entry
 
-
----
 
 ## 📱 Screens
 
@@ -127,6 +127,7 @@ home_essentials/
 ├── pubspec.yaml
 └── README.md
 
+
 ## 🧠 Data Models & Logic
 
 ### Item Model (`item_model.dart`)
@@ -140,9 +141,7 @@ home_essentials/
 Units are compared using internal normalization without modifying original display values:
 - `1 kg = 1000 g`[cite: 1]
 - `1 litre = 1000 ml`[cite: 1]
-- Rule: If `Current Quantity < Required Quantity`, flag as **Low Stock**[cite: 1].
-
----
+- Rule: If `Current Quantity < Required Quantity`, flag as **Low Stock**
 
 ## 🚀 Getting Started
 
@@ -173,9 +172,7 @@ Units are compared using internal normalization without modifying original displ
    ```bash
    flutter devices
    flutter run
-   ```[cite: 1]
-
----
+  
 
 ## 💻 Development Commands
 
@@ -186,9 +183,7 @@ Units are compared using internal normalization without modifying original displ
 | `dart format lib` | Auto-format Dart source files[cite: 1] |
 | `flutter test` | Run local unit and widget test suites[cite: 1] |
 | `flutter build apk --release` | Generate production Android release APK[cite: 1] |
-| `flutter clean` | Clear cached builds and dependencies[cite: 1] |
-
----
+| `flutter clean` | Clear cached builds and dependencies
 
 ## 🗺 Roadmap & Limitations
 
@@ -211,8 +206,8 @@ Units are compared using internal normalization without modifying original displ
 - **Flutter commands not recognized:** Check system environment variables to confirm the Flutter SDK `/bin` directory is added to your system `PATH`[cite: 1]. Run `flutter doctor`[cite: 1].
 - **Device not found:** Run `flutter devices` and verify USB debugging (for physical devices) or verify the Android emulator is running[cite: 1].
 - **Build cache issues:**
-  ```bash
+ 
   flutter clean
   flutter pub get
   flutter run
-  ```[cite: 1]
+  
